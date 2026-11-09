@@ -34,7 +34,7 @@ def main():
     ]
     vrptw = [
         solve.ortools(sc, a.time_limit, True, mh)
-        for mh in ["GREEDY_DESCENT", "GUIDED_LOCAL_SEARCH", "SIMULATED_ANNEALING", "TABU_SEARCH"]
+        for mh in ["GREEDY_DESCENT", "GUIDED_LOCAL_SEARCH", "TABU_SEARCH"]
     ]
     table = pd.DataFrame(
         [
@@ -56,11 +56,11 @@ def main():
     viz.convergence([s for s in vrptw if s]).write_image(assets / "convergence.png", scale=2)
 
     rows = []
-    for k in range(2, 2 * a.vehicles + 1):
-        s = solve.ortools(replace(sc, vehicles=k), a.time_limit / 3, True)
+    for k in range(a.vehicles - 2, 2 * a.vehicles + 1):
+        s = solve.ortools(replace(sc, vehicles=k), a.time_limit / 3, True, exact=True)
         if s:
-            rows.append((k, s.distance, s.vehicles))
-            print(f"vehicles={k:2d} distance={s.distance:7.2f} km used={s.vehicles}")
+            rows.append((k, s.distance))
+            print(f"vehicles={k:2d} distance={s.distance:7.2f} km")
     viz.tradeoff(rows).write_image(assets / "tradeoff.png", scale=2)
 
     best = min((s for s in vrptw if s), key=lambda s: s.distance)

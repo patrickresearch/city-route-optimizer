@@ -28,6 +28,7 @@ def ortools(
     metaheuristic="GUIDED_LOCAL_SEARCH",
     first="PATH_CHEAPEST_ARC",
     name=None,
+    exact=False,
 ):
     n, k = sc.size, sc.vehicles
     manager = pywrapcp.RoutingIndexManager(n, k, 0)
@@ -45,6 +46,9 @@ def ortools(
         for v in range(k):
             dim.CumulVar(model.Start(v)).SetRange(*sc.windows[0].tolist())
             dim.CumulVar(model.End(v)).SetRange(*sc.windows[0].tolist())
+    if exact:
+        for v in range(k):
+            model.NextVar(model.Start(v)).RemoveValue(model.End(v))
 
     params = pywrapcp.DefaultRoutingSearchParameters()
     params.first_solution_strategy = getattr(routing_enums_pb2.FirstSolutionStrategy, first)

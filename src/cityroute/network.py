@@ -51,7 +51,8 @@ class Network:
     def buildings(self):
         path = DATA / f"{_slug(self.place)}_buildings.npy"
         if not path.exists():
-            c = ox.features_from_place(self.place, {"building": True}).geometry.centroid
+            b = ox.projection.project_gdf(ox.features_from_place(self.place, {"building": True}))
+            c = b.geometry.centroid.to_crs(4326)
             path.parent.mkdir(exist_ok=True)
             np.save(path, np.column_stack([c.x, c.y]))
         return np.load(path)

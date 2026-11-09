@@ -47,7 +47,7 @@ def _clock(seconds):
 
 def route_map(net, sc, sol, windows=True):
     pts = net.xy[sc.sites]
-    m = folium.Map(pts.mean(0)[::-1].tolist(), zoom_start=13, tiles="CartoDB positron")
+    m = folium.Map(pts.mean(0)[::-1].tolist(), zoom_start=13)
     epoch = SHIFT_START.timestamp() * 1000
     features = []
     for k, (coords, times) in enumerate(trajectories(net, sc, sol, windows)):
@@ -140,15 +140,9 @@ def convergence(solutions):
 
 
 def tradeoff(rows):
-    k, dist, used = zip(*rows)
-    fig = go.Figure()
-    fig.add_scatter(x=k, y=dist, mode="lines+markers", name="Total distance [km]")
-    fig.add_bar(x=k, y=used, name="Vehicles used", yaxis="y2", opacity=0.3)
+    k, dist = zip(*rows)
+    fig = go.Figure(go.Scatter(x=k, y=dist, mode="lines+markers"))
     fig.update_layout(
-        template="plotly_white",
-        xaxis_title="Available vehicles",
-        yaxis_title="Total distance [km]",
-        yaxis2=dict(title="Vehicles used", overlaying="y", side="right"),
-        legend=dict(orientation="h", y=1.1),
+        template="plotly_white", xaxis_title="Vehicles", yaxis_title="Total distance [km]"
     )
     return fig
