@@ -58,9 +58,12 @@ def main():
     rows = []
     for k in range(a.vehicles - 2, 2 * a.vehicles + 1):
         s = solve.ortools(replace(sc, vehicles=k), a.time_limit / 3, True, exact=True)
-        if s:
+        print(
+            f"vehicles={k:2d} "
+            + (f"distance={s.distance:7.2f} km used={s.vehicles}" if s else "no solution")
+        )
+        if s and s.vehicles == k:
             rows.append((k, s.distance))
-            print(f"vehicles={k:2d} distance={s.distance:7.2f} km")
     viz.tradeoff(rows).write_image(assets / "tradeoff.png", scale=2)
 
     best = min((s for s in vrptw if s), key=lambda s: s.distance)

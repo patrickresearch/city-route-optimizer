@@ -1,5 +1,6 @@
 import time as clock
 from dataclasses import dataclass, field
+from itertools import accumulate
 
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
@@ -47,8 +48,11 @@ def ortools(
             dim.CumulVar(model.Start(v)).SetRange(*sc.windows[0].tolist())
             dim.CumulVar(model.End(v)).SetRange(*sc.windows[0].tolist())
     if exact:
+        model.AddConstantDimension(1, n, True, "visits")
+        visits = model.GetDimensionOrDie("visits")
         for v in range(k):
-            model.NextVar(model.Start(v)).RemoveValue(model.End(v))
+            visits.SetCumulVarSoftLowerBound(model.End(v), 2, 10**7)
+            model.SetVehicleUsedWhenEmpty(True, v)
 
     params = pywrapcp.DefaultRoutingSearchParameters()
     params.first_solution_strategy = getattr(routing_enums_pb2.FirstSolutionStrategy, first)
@@ -77,4 +81,6 @@ def ortools(
             routes.append(route)
     total = distance(sc, routes)
     label = name or f"OR-Tools {metaheuristic.replace('_', ' ').title()}"
-    return Solution(label, routes, total, runtime, [*trace, (runtime, total)])
+    trace.append((runtime, total))
+    best = accumulate((c for _, c in trace), min)
+    return Solution(label, routes, total, runtime, [(t, c) for (t, _), c in zip(trace, best)])

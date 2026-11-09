@@ -88,6 +88,10 @@ def route_map(net, sc, sol, windows=True):
 def gif(net, sc, sol, path, windows=True, frames=150, fps=25):
     traj = trajectories(net, sc, sol, windows)
     pts = net.xy[sc.sites]
+    lo, hi = pts.min(0), pts.max(0)
+    pad = 0.06 * (hi - lo)
+    lo, hi = lo - pad, hi + pad
+    w, h = (hi - lo) * [np.cos(np.radians(pts[:, 1].mean())), 1]
     fig, ax = ox.plot_graph(
         net.graph,
         show=False,
@@ -96,12 +100,11 @@ def gif(net, sc, sol, path, windows=True, frames=150, fps=25):
         edge_color="#d9d9d9",
         edge_linewidth=0.5,
         bgcolor="white",
-        figsize=(8, 8),
+        figsize=(8, 8 * h / w),
     )
-    lo, hi = pts.min(0), pts.max(0)
-    pad = 0.08 * (hi - lo)
-    ax.set_xlim(lo[0] - pad[0], hi[0] + pad[0])
-    ax.set_ylim(lo[1] - pad[1], hi[1] + pad[1])
+    fig.subplots_adjust(0, 0, 1, 1)
+    ax.set_xlim(lo[0], hi[0])
+    ax.set_ylim(lo[1], hi[1])
     ax.scatter(*pts[1:].T, s=12, c="white", edgecolors="black", linewidths=0.6, zorder=3)
     ax.scatter(*pts[0], s=90, c="black", marker="s", zorder=4)
     colors = [COLORS[k % len(COLORS)] for k in range(len(traj))]
@@ -120,7 +123,9 @@ def gif(net, sc, sol, path, windows=True, frames=150, fps=25):
         label.set_text(_clock(now))
         return [*trails, *dots, label]
 
-    FuncAnimation(fig, draw, frames=frames, blit=True).save(path, writer=PillowWriter(fps=fps))
+    FuncAnimation(fig, draw, frames=frames, blit=True).save(
+        path, writer=PillowWriter(fps=fps), dpi=90
+    )
     plt.close(fig)
 
 
