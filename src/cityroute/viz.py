@@ -1,4 +1,6 @@
+import re
 from datetime import UTC, datetime
+from pathlib import Path
 
 import folium
 import matplotlib.pyplot as plt
@@ -21,9 +23,11 @@ COLORS = [
     "#7f7f7f",
 ]
 SHIFT_START = datetime(2026, 1, 1, 8, tzinfo=UTC)
+README = Path(__file__).resolve().parents[2] / "README.md"
 
 
-def trajectories(net, sc, sol, windows=True, tolerance=1e-4):
+def trajectories(sc, sol, windows=True, tolerance=1e-4):
+    net = sc.net
     out = []
     for route in sol.routes:
         stops, t, coords, times = [0, *route, 0], 0.0, [], []
@@ -45,14 +49,14 @@ def _clock(seconds):
     return f"{m // 60:02d}:{m % 60:02d}"
 
 
-def route_map(net, sc, sol, windows=True):
-    pts = net.xy[sc.sites]
+def route_map(sc, sol, windows=True):
+    pts = sc.net.xy[sc.sites]
     m = folium.Map(pts.mean(0)[::-1].tolist(), zoom_start=13)
     epoch = SHIFT_START.timestamp() * 1000
     features = []
-    for k, (coords, times) in enumerate(trajectories(net, sc, sol, windows)):
+    for k, (coords, times) in enumerate(trajectories(sc, sol, windows)):
         color = COLORS[k % len(COLORS)]
-        folium.PolyLine(coords[:, ::-1].tolist(), color=color, weight=3, opacity=0.4).add_to(m)
+        folium.PolyLine(coords[:, ::-1].tolist(), color=color, weight=4, opacity=0.8).add_to(m)
         features.append(
             {
                 "type": "Feature",
@@ -85,15 +89,15 @@ def route_map(net, sc, sol, windows=True):
     return m
 
 
-def gif(net, sc, sol, path, windows=True, frames=150, fps=25):
-    traj = trajectories(net, sc, sol, windows)
-    pts = net.xy[sc.sites]
+def gif(sc, sol, path, windows=True, frames=150, fps=25):
+    traj = trajectories(sc, sol, windows)
+    pts = sc.net.xy[sc.sites]
     lo, hi = pts.min(0), pts.max(0)
     pad = 0.06 * (hi - lo)
     lo, hi = lo - pad, hi + pad
     w, h = (hi - lo) * [np.cos(np.radians(pts[:, 1].mean())), 1]
     fig, ax = ox.plot_graph(
-        net.graph,
+        sc.net.graph,
         show=False,
         close=False,
         node_size=0,
@@ -149,5 +153,37 @@ def tradeoff(rows):
     fig = go.Figure(go.Scatter(x=k, y=dist, mode="lines+markers"))
     fig.update_layout(
         template="plotly_white", xaxis_title="Vehicles", yaxis_title="Total distance [km]"
+    )
+    return fig
+
+
+def to_readme(df, tag):
+    rows = [df.columns, ["---"] * df.shape[1], *df.astype(str).to_numpy()]
+    table = "\n".join("| " + " | ".join(map(str, r)) + " |" for r in rows)
+    block = f"<!-- {tag} -->\n{table}\n<!-- /{tag} -->"
+    text = README.read_text()
+    README.write_text(
+        re.sub(f"<!-- {tag} -->.*?<!-- /{tag} -->", lambda _: block, text, flags=re.S)
+    )
+
+
+def robustness(summary):
+    fig = go.Figure()
+    for col, name in [("stops_on_time_pct", "Stops on time"), ("days_on_time_pct", "Days on time")]:
+        fig.add_scatter(
+            x=summary.buffer_pct,
+            y=summary[col],
+            mode="lines+markers+text",
+            name=name,
+            text=[f"+{d} % km" for d in summary.extra_km_pct] if col.startswith("days") else None,
+            textposition=["bottom right", "top left"] * len(summary),
+            cliponaxis=False,
+        )
+    fig.update_layout(
+        template="plotly_white",
+        xaxis_title="Planning buffer on travel times [%]",
+        yaxis_title="Share on time [%]",
+        legend=dict(orientation="h", y=1.1),
+        margin=dict(r=90),
     )
     return fig

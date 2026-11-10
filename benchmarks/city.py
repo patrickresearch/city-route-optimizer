@@ -9,6 +9,7 @@ from cityroute.network import Network
 from cityroute.scenario import city
 
 ROOT = Path(__file__).resolve().parents[1]
+SEARCH = ["GREEDY_DESCENT", "GUIDED_LOCAL_SEARCH", "TABU_SEARCH"]
 
 
 def main():
@@ -18,6 +19,7 @@ def main():
     p.add_argument("--vehicles", type=int, default=8)
     p.add_argument("--capacity", type=int, default=60)
     p.add_argument("--time-limit", type=float, default=30)
+    p.add_argument("--exact-limit", type=float, default=120)
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
 
@@ -29,46 +31,49 @@ def main():
     cvrp = [
         heuristics.nearest_neighbor(sc),
         heuristics.savings(sc),
-        solve.ortools(sc, a.time_limit, False, "GREEDY_DESCENT", name="OR-Tools Local Search"),
-        solve.ortools(sc, a.time_limit, False),
+        *(solve.ortools(sc, a.time_limit, False, mh) for mh in SEARCH[:2]),
+        solve.hgs(sc, a.time_limit, False, a.seed),
     ]
-    vrptw = [
-        solve.ortools(sc, a.time_limit, True, mh)
-        for mh in ["GREEDY_DESCENT", "GUIDED_LOCAL_SEARCH", "TABU_SEARCH"]
-    ]
-    table = pd.DataFrame(
-        [
+    search = [solve.ortools(sc, a.time_limit, True, mh) for mh in SEARCH]
+    search.append(solve.hgs(sc, a.time_limit, True, a.seed))
+    vrptw = [heuristics.insertion(sc), *search]
+    rows = []
+    for prob, runs, windows in [("CVRP", cvrp, False), ("VRPTW", vrptw, True)]:
+        best = min((s for s in runs[-2:] if s), key=lambda s: s.distance)
+        bound = solve.cpsat(sc, a.exact_limit, windows, hint=best.routes).bound
+        rows += [
             dict(
                 problem=prob,
                 method=s.method,
                 distance_km=round(s.distance, 2),
+                gap_pct=round(100 * (s.distance / bound - 1), 2),
                 vehicles=s.vehicles,
                 runtime_s=round(s.runtime, 2),
             )
-            for prob, runs in [("CVRP", cvrp), ("VRPTW", vrptw)]
             for s in runs
             if s
         ]
-    )
+    table = pd.DataFrame(rows)
     print(table.to_string(index=False))
     table.to_csv(results / "comparison.csv", index=False)
+    viz.to_readme(table, "comparison")
 
-    viz.convergence([s for s in vrptw if s]).write_image(assets / "convergence.png", scale=2)
+    viz.convergence([s for s in search if s]).write_image(assets / "convergence.png", scale=2)
 
-    rows = []
-    for k in range(a.vehicles - 2, 2 * a.vehicles + 1):
-        s = solve.ortools(replace(sc, vehicles=k), a.time_limit / 3, True, exact=True)
+    curve = []
+    for k in range(-(-sc.demand.sum() // a.capacity), 2 * a.vehicles + 1):
+        s = solve.ortools(replace(sc, vehicles=k), a.time_limit / 3, True, use_all=True)
         print(
             f"vehicles={k:2d} "
             + (f"distance={s.distance:7.2f} km used={s.vehicles}" if s else "no solution")
         )
         if s and s.vehicles == k:
-            rows.append((k, s.distance))
-    viz.tradeoff(rows).write_image(assets / "tradeoff.png", scale=2)
+            curve.append((k, s.distance))
+    viz.tradeoff(curve).write_image(assets / "tradeoff.png", scale=2)
 
-    best = min((s for s in vrptw if s), key=lambda s: s.distance)
-    viz.route_map(net, sc, best).save(results / "routes.html")
-    viz.gif(net, sc, best, assets / "routes.gif")
+    best = min((s for s in search if s), key=lambda s: s.distance)
+    viz.route_map(sc, best).save(results / "routes.html")
+    viz.gif(sc, best, assets / "routes.gif")
 
 
 if __name__ == "__main__":

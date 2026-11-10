@@ -8,3 +8,4 @@ results/
 cache/
 .DS_Store
 *-out/
+OPTIMIZATION.md

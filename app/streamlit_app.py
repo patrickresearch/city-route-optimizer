@@ -6,7 +6,13 @@ from cityroute.network import Network
 from cityroute.scenario import city
 
 PLACE = "Heidelberg, Germany"
-METHODS = ["OR-Tools (Guided Local Search)", "Clarke-Wright Savings", "Nearest Neighbor"]
+METHODS = {
+    "PyVRP (Hybrid Genetic Search)": lambda sc, w, t: solve.hgs(sc, t, w),
+    "OR-Tools (Guided Local Search)": lambda sc, w, t: solve.ortools(sc, t, w),
+    "Clarke-Wright Savings": lambda sc, w, t: heuristics.savings(sc),
+    "Nearest Neighbor": lambda sc, w, t: heuristics.nearest_neighbor(sc),
+}
+SEARCH = list(METHODS)[:2]
 
 st.set_page_config("City Route Optimizer", layout="wide")
 
@@ -16,19 +22,14 @@ def network():
     return Network(PLACE)
 
 
-@st.cache_data
+@st.cache_resource
 def scenario(customers, vehicles, capacity, seed):
     return city(network(), customers, vehicles, capacity, seed)
 
 
 @st.cache_data
 def run(sc_key, method, windows, limit):
-    sc = scenario(*sc_key)
-    if method == METHODS[1]:
-        return heuristics.savings(sc)
-    if method == METHODS[2]:
-        return heuristics.nearest_neighbor(sc)
-    return solve.ortools(sc, limit, windows)
+    return METHODS[method](scenario(*sc_key), windows, limit)
 
 
 with st.sidebar:
@@ -39,13 +40,13 @@ with st.sidebar:
     seed = st.number_input("Seed", 0, 999, 0)
     st.header("Solver")
     method = st.selectbox("Method", METHODS)
-    windows = st.toggle("Time windows", True, disabled=method != METHODS[0])
-    limit = st.slider("Time limit [s]", 1, 30, 5, disabled=method != METHODS[0])
+    windows = st.toggle("Time windows", True, disabled=method not in SEARCH)
+    limit = st.slider("Time limit [s]", 1, 30, 5, disabled=method not in SEARCH)
 
 st.title(f"Vehicle routing in {PLACE.split(',')[0]}")
 key = (customers, vehicles, capacity, seed)
 sc = scenario(*key)
-windows = windows and method == METHODS[0]
+windows = windows and method in SEARCH
 sol = run(key, method, windows, limit)
 
 if sol is None:
@@ -61,7 +62,7 @@ if sol.vehicles > vehicles:
     st.warning("The heuristic ignores the fleet size and needs more vehicles than available.")
 
 st_folium(
-    viz.route_map(network(), sc, sol, windows),
+    viz.route_map(sc, sol, windows),
     height=620,
     use_container_width=True,
     returned_objects=[],

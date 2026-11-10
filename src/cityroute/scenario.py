@@ -16,6 +16,7 @@ class Scenario:
     scale: float = 1.0
     sites: np.ndarray | None = None
     pred: np.ndarray | None = None
+    net: object = None
 
     @property
     def size(self):
@@ -25,10 +26,8 @@ class Scenario:
 def city(net, customers=40, vehicles=6, capacity=60, seed=0, horizon=8 * 3600, service=300):
     rng = np.random.default_rng(seed)
     depot = net.nearest(np.median(net.xy, axis=0))
-    snapped = net.nearest(rng.permutation(net.buildings()))
-    _, first = np.unique(snapped, return_index=True)
-    picks = snapped[np.sort(first)]
-    sites = np.r_[depot, picks[picks != depot][:customers]]
+    net, stops = net.attach(rng.permutation(net.buildings())[:customers])
+    sites = np.r_[depot, stops]
     dist, time, pred = net.matrices(sites)
     width = rng.choice([3600, 7200], size=customers)
     start = rng.integers(0, horizon - width)
@@ -43,10 +42,11 @@ def city(net, customers=40, vehicles=6, capacity=60, seed=0, horizon=8 * 3600, s
         scale=1000.0,
         sites=sites,
         pred=pred,
+        net=net,
     )
 
 
-def solomon(path, vehicles=None, scale=100):
+def solomon(path, vehicles=None, scale=10_000):
     rows = [r.split() for r in Path(path).read_text().splitlines()]
     numeric = [r for r in rows if r and all(t.replace(".", "", 1).isdigit() for t in r)]
     nums = [list(map(float, r)) for r in numeric]
